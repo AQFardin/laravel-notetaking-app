@@ -1,0 +1,105 @@
+/* Using Google Fonts for a modern look */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
+/* CSS Variables for easy theme management */
+:root {
+    --primary-orange-light: #ffe9d4; /* Active background color */
+    --primary-orange-dark: #d17800;  /* Active icon/text color */
+    --sidebar-icon: #5a616d;
+    --sidebar-icon-hover: #1a1d21;
+    --content-bg: #f5f7fa;
+    --text-color: #333;
+}
+
+/* Basic Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--content-bg);
+    color: var(--text-color);
+}
+
+.app-container {
+    display: flex;
+}
+
+/* ===== Sidebar Styles ===== */
+.sidebar {
+    width: 240px;
+    height: 100vh;
+    background-color: transparent;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: fixed;
+    top: 0;
+    left: 0;
+}
+
+.sidebar ul {
+    list-style: none;
+    width: 100%;
+}
+
+.sidebar ul li {
+    margin-bottom: 10px;
+}
+
+.sidebar a,
+.icon-button {
+    color: var(--sidebar-icon);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.sidebar a:hover,
+.icon-button:hover {
+    color: var(--sidebar-icon-hover);
+    background-color: #eceff3;
+}
+
+/* Active state */
+.sidebar a.active {
+    background-color: var(--primary-orange-light);
+    color: var(--primary-orange-dark);
+}
+.sidebar a.active i,
+.sidebar a.active span {
+    color: var(--primary-orange-dark);
+}
+
+/* Icon styling */
+.sidebar i {
+    font-size: 20px;
+    margin-right: 20px;
+    width: 25px;
+    text-align: center;
+}
+
+/* Buttons (e.g., Logout) */
+.icon-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    font-size: 16px;
+    font-family: 'Inter', sans-serif;
+}
+
+/* ===== Main Content ===== */
+.main-content {
+    flex-grow: 1;
+    margin-left: 240px; /* match sidebar width */
+    padding: 30px;
+}
