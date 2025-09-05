@@ -4,10 +4,24 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
-/* AUTH PAGE (combined login/register UI) */
-Route::get('/auth', fn() => view('auth.auth'))->name('auth');
+/* =========================
+   AUTH UI (single Blade)
+   - use /auth?mode=login or /auth?mode=register
+   - GET /login and GET /register just open /auth with the right mode
+========================= */
+Route::get('/auth', function (Request $r) {
+    $mode = $r->query('mode');
+    $mode = in_array($mode, ['login','register']) ? $mode : 'login';
+    return view('auth.auth', ['mode' => $mode]);
+   // <-- your single Blade: resources/views/auth.blade.php
+})->name('auth');
 
-/* REGISTER — Step 1: username, email, password */
+Route::get('/login', fn() => redirect()->route('auth', ['mode' => 'login']))->name('login.form');
+Route::get('/register', fn() => redirect()->route('auth', ['mode' => 'register']))->name('register.form');
+
+/* =========================
+   REGISTER — Step 1 (username/email/password)
+========================= */
 Route::post('/register', function (Request $r) {
     $r->validate([
         'username' => 'required|string|max:50|unique:users,username',
@@ -18,32 +32,33 @@ Route::post('/register', function (Request $r) {
         'email.unique'    => 'A user with this email already exists.',
     ]);
 
-    // Insert (plain password as requested)
     DB::insert(
         "INSERT INTO users (username, email, password, created_at) VALUES (?, ?, ?, NOW())",
-        [$r->username, $r->email, $r->password]
+        [$r->username, $r->email, $r->password] // NOTE: consider hashing later
     );
 
-    // Get new id, move to Step 2
     $id = DB::getPdo()->lastInsertId();
     $r->session()->put('pending_user_id', $id);
 
     return redirect()->route('register.details.form');
 })->name('register');
 
-/* REGISTER — Step 2 form: full_name, age, optional profile_pic */
+/* =========================
+   REGISTER — Step 2 (details)
+========================= */
 Route::get('/register/details', function (Request $r) {
     if (!$r->session()->has('pending_user_id')) {
-        // if they refreshed/cleared, go back to auth page (register panel)
-        return redirect()->route('auth')->with('show_register', true);
+        // no step-1 data; open the Register panel
+        return redirect()->route('auth', ['mode' => 'register'])->with('show_register', true);
     }
     return view('auth.register_details');
 })->name('register.details.form');
 
-/* REGISTER — Step 2 submit: update same row */
 Route::post('/register/details', function (Request $r) {
     $id = $r->session()->get('pending_user_id');
-    if (!$id) return redirect()->route('auth')->with('show_register', true);
+    if (!$id) {
+        return redirect()->route('auth', ['mode' => 'register'])->with('show_register', true);
+    }
 
     $r->validate([
         'full_name'   => 'required|string|max:100',
@@ -63,17 +78,18 @@ Route::post('/register/details', function (Request $r) {
         [$r->full_name, (int)$r->age, $picPath, $id]
     );
 
-    // finish registration: clear pending id, “log in”
     $r->session()->forget('pending_user_id');
     $r->session()->put('user_id', $id);
 
     return redirect()->route('dashboard')->with('status', 'Registration complete!');
 })->name('register.details.submit');
 
-/* LOGIN — (username or email) + plain password */
+/* =========================
+   LOGIN — (username or email) + password
+========================= */
 Route::post('/login', function (Request $r) {
     $r->validate([
-        'email'    => 'required|string',  // can be username or email
+        'email'    => 'required|string', // can be username OR email
         'password' => 'required|string',
     ]);
 
@@ -87,10 +103,16 @@ Route::post('/login', function (Request $r) {
         return redirect()->route('dashboard');
     }
 
-    return back()->withErrors(['login' => 'Invalid credentials'])->withInput();
+    // send user back to LOGIN panel with errors + old input
+    return redirect()
+        ->route('auth', ['mode' => 'login'])
+        ->withErrors(['email' => 'Invalid credentials'])  // surface under email field in your Blade
+        ->withInput();
 })->name('login');
 
-/* DASHBOARD */
+/* =========================
+   DASHBOARD
+========================= */
 Route::get('/dashboard', function (Request $r) {
     $id = $r->session()->get('user_id');
     if (!$id) return redirect()->route('auth');
@@ -99,60 +121,174 @@ Route::get('/dashboard', function (Request $r) {
     return view('dashboard', ['u' => $user]);
 })->name('dashboard');
 
-/* LOGOUT */
+/* =========================
+   LOGOUT
+========================= */
 Route::post('/logout', function (Request $r) {
     $r->session()->forget('user_id');
     return redirect()->route('auth');
 })->name('logout');
-// NEW: A simple middleware to check if the user is logged in
-Route::aliasMiddleware('auth.check', function (Request $request, Closure $next) {
-    if (!$request->session()->has('user_id')) {
-        return redirect()->route('auth');
-    }
-    return $next($request);
-});
 
-// NEW: Group for all routes that require a user to be logged in
-Route::middleware('auth.check')->group(function () {
+/* =========================
+   NOTES (protected routes)
+========================= */
+Route::get('/notes', function (Request $r) {
+    $uid = $r->session()->get('user_id');
+    if (!$uid) return redirect()->route('auth');
 
-    /* CREATE A NEW NOTE (Handles the '+' button click) */
-    Route::post('/notes', function (Request $r) {
-        $userId = $r->session()->get('user_id');
-        $title = "Untitled Note";
-        $content = ""; // Start with an empty note
+    $notes = DB::select(
+        "SELECT * FROM notes WHERE user_id = ? ORDER BY updated_at DESC, created_at DESC",
+        [$uid]
+    );
+    return view('notes.index', ['notes' => $notes]);
+})->name('notes.index');
 
-        // Insert into notes table
-        DB::insert(
-            "INSERT INTO notes (user_id, title, content, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())",
-            [$userId, $title, $content]
-        );
+Route::post('/notes', function (Request $r) {
+    $userId  = $r->session()->get('user_id');
+    if (!$userId) return redirect()->route('auth');
 
-        $noteId = DB::getPdo()->lastInsertId();
+    $title   = $r->input('title', 'Untitled Note');
+    $content = $r->input('content', '');
 
-        // Create the first version record
+    DB::insert(
+        "INSERT INTO notes (user_id, title, content, created_at, updated_at)
+         VALUES (?, ?, ?, NOW(), NOW())",
+        [$userId, $title, $content]
+    );
+
+    $noteId = DB::getPdo()->lastInsertId();
+
+    if (trim((string)$content) !== '') {
         DB::insert(
             "INSERT INTO note_versions (note_id, content, created_at) VALUES (?, ?, NOW())",
             [$noteId, $content]
         );
+    }
 
-        // Redirect to the new note's edit page
-        return redirect()->route('notes.edit', ['id' => $noteId]);
-    })->name('notes.store'); // This defines the route your form is looking for
+    return redirect()->route('notes.edit', ['id' => $noteId]);
+})->name('notes.store');
 
-    /* SHOW A SINGLE NOTE FOR EDITING */
-    Route::get('/notes/{id}', function (Request $r, $id) {
-        $userId = $r->session()->get('user_id');
-        $note = DB::selectOne(
-            "SELECT * FROM notes WHERE id = ? AND user_id = ?",
-            [$id, $userId]
-        );
+Route::get('/notes/{id}', function (Request $r, $id) {
+    $userId = $r->session()->get('user_id');
+    if (!$userId) return redirect()->route('auth');
 
-        if (!$note) {
-            abort(404); // Show a 'Not Found' error if the note doesn't belong to the user
+    $note = DB::selectOne(
+        "SELECT * FROM notes WHERE id = ? AND user_id = ?",
+        [$id, $userId]
+    );
+    if (!$note) abort(404);
+    return view('notes.edit', ['note' => $note]);
+})->name('notes.edit');
+
+Route::post('/notes/{id}/update', function (Request $r, $id) {
+    $uid = $r->session()->get('user_id');
+    if (!$uid) return response('Unauthorized', 401);
+
+    $note = DB::selectOne("SELECT id, user_id, title, content, color, note_group_id FROM notes WHERE id = ? LIMIT 1", [$id]);
+    if (!$note || (int)$note->user_id !== (int)$uid) return response('Forbidden', 403);
+
+    $newTitle   = $r->input('title', null);
+    $newContent = $r->input('content', null);
+    $newColor   = $r->input('color', '#fef9c3');
+    $newGroupId = $r->input('note_group_id', null);
+
+    $didChangeContent = (string)$newContent !== (string)$note->content;
+    $didChangeTitle   = (string)$newTitle   !== (string)$note->title;
+    $didChangeColor   = (string)$newColor   !== (string)$note->color;
+    $didChangeGroup   = (string)$newGroupId !== (string)$note->note_group_id;
+
+    if (!($didChangeContent || $didChangeTitle || $didChangeColor || $didChangeGroup)) {
+        return response()->json(['ok' => true, 'changed' => false]);
+    }
+
+    DB::beginTransaction();
+    try {
+        if ($didChangeContent && !is_null($note->content) && trim((string)$note->content) !== '') {
+            DB::insert(
+                "INSERT INTO note_versions (note_id, content, created_at)
+                 VALUES (?, ?, NOW())",
+                [$note->id, $note->content]
+            );
         }
 
-        // You will need to create this view file next
-        return view('notes.edit', ['note' => $note]);
-    })->name('notes.edit');
+        DB::update(
+            "UPDATE notes
+             SET title = ?, content = ?, color = ?, note_group_id = ?, updated_at = NOW()
+             WHERE id = ? AND user_id = ?",
+            [$newTitle, $newContent, $newColor, $newGroupId, $id, $uid]
+        );
 
-});
+        DB::commit();
+        return response()->json(['ok' => true, 'changed' => true]);
+    } catch (\Throwable $e) {
+        DB::rollBack();
+        return response()->json(['error' => 'Update failed'], 500);
+    }
+})->name('notes.update');
+
+Route::get('/notes/{id}/versions', function (Request $r, $id) {
+    $uid = $r->session()->get('user_id');
+    if (!$uid) return response('Unauthorized', 401);
+
+    $own = DB::selectOne("SELECT user_id FROM notes WHERE id = ?", [$id]);
+    if (!$own || (int)$own->user_id !== (int)$uid) return response('Forbidden', 403);
+
+    $versions = DB::select(
+        "SELECT id, note_id, created_at, LEFT(content, 200) AS preview
+         FROM note_versions
+         WHERE note_id = ?
+         ORDER BY created_at DESC",
+        [$id]
+    );
+
+    return response()->json($versions);
+})->name('notes.versions');
+
+Route::post('/notes/{id}/revert/{versionId}', function (Request $r, $id, $versionId) {
+    $uid = $r->session()->get('user_id');
+    if (!$uid) return response('Unauthorized', 401);
+
+    $note = DB::selectOne("SELECT id, user_id, content FROM notes WHERE id = ?", [$id]);
+    if (!$note || (int)$note->user_id !== (int)$uid) return response('Forbidden', 403);
+
+    $ver = DB::selectOne(
+        "SELECT id, content, created_at FROM note_versions WHERE id = ? AND note_id = ?",
+        [$versionId, $id]
+    );
+    if (!$ver) return response()->json(['error' => 'Version not found'], 404);
+
+    DB::beginTransaction();
+    try {
+        if (!is_null($note->content) && trim((string)$note->content) !== '') {
+            DB::insert(
+                "INSERT INTO note_versions (note_id, content, created_at)
+                 VALUES (?, ?, NOW())",
+                [$note->id, $note->content]
+            );
+        }
+
+        DB::update("UPDATE notes SET content = ?, updated_at = NOW() WHERE id = ?", [$ver->content, $id]);
+
+        DB::commit();
+        return response()->json([
+            'ok'         => true,
+            'content'    => $ver->content,
+            'updated_at' => date('c'),
+        ]);
+    } catch (\Throwable $e) {
+        DB::rollBack();
+        return response()->json(['error' => 'Revert failed'], 500);
+    }
+})->name('notes.revert');
+
+Route::post('/notes/{id}/delete', function (Request $r, $id) {
+    $uid = $r->session()->get('user_id');
+    if (!$uid) return response('Unauthorized', 401);
+
+    DB::delete("DELETE FROM notes WHERE id = ? AND user_id = ?", [$id, $uid]);
+    return response()->json(['ok' => true]);
+})->name('notes.delete');
+
+/* Stubs */
+Route::post('/notes/{id}/share', fn() => response()->json(['ok' => true]))->name('notes.share');
+Route::post('/note-groups', fn(Request $r) => response()->json(['id' => 1, 'name' => $r->input('name', 'New Group')]))->name('note_groups.store');

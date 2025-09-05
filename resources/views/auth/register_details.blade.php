@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <title>Complete Registration</title>
-  @vite(['resources/css/auth.css'])
+  <link rel="stylesheet" href="{{ asset('css/auth.css') }}">
+  <script src="{{ asset('js/auth.js') }}" defer></script>
 </head>
 <body>
   <div class="login-container">

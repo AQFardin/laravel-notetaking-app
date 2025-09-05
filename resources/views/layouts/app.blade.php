@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyNotes App</title>
 
+    {{-- CSRF for AJAX (notes.js uses this) --}}
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
     {{-- Font Awesome for icons --}}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 
@@ -16,11 +19,20 @@
         <nav class="sidebar">
             <ul class="sidebar-top">
                 <li>
-                    <a href="{{ route('dashboard') }}" class="{{ Request::is('dashboard') ? 'active' : '' }}">
+                    <a href="{{ route('dashboard') }}" class="{{ request()->is('dashboard') ? 'active' : '' }}">
                         <i class="fas fa-grip"></i><span>Dashboard</span>
                     </a>
                 </li>
-                <li><a href="#"><i class="fas fa-plus"></i><span>Notes</span></a></li>
+
+                {{-- NOTES tab --}}
+                <li>
+                    <a href="{{ route('notes.index') }}" class="{{ request()->is('notes') ? 'active' : '' }}">
+                        <i class="fas fa-sticky-note"></i><span>Notes</span>
+                    </a>
+                </li>
+
+                
+
                 <li><a href="#"><i class="fas fa-users"></i><span>Group</span></a></li>
                 <li><a href="#"><i class="fas fa-flag"></i><span>Events</span></a></li>
                 <li><a href="#"><i class="fas fa-calendar-alt"></i><span>Calendar</span></a></li>
