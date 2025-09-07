@@ -129,16 +129,30 @@ body {
 .note-card {
   background:#fef9c3;
   border-radius: 18px;
-  padding: 12px;                 /* was 16px */
-  min-height: 110px;             /* was 120px */
+  padding: 12px;
+  min-height: 110px;
   border: 1px solid rgba(0,0,0,0.06);
   box-shadow: 0 2px 5px rgba(0,0,0,0.06);
   cursor: pointer;
   position: relative;
   word-wrap: break-word;
+
+  /* FIX: make sure everything aligns left */
+  text-align: left;
 }
-.note-card .note-title { margin-bottom: 6px; font-weight: 700; }
-.note-card .note-body { white-space: normal; }
+
+.note-card .note-title {
+  margin-bottom: 6px;
+  font-weight: 700;
+  text-align: left;   /* extra safety */
+}
+
+.note-card .note-body {
+  white-space: normal;
+  text-align: left;   /* FIX: force body text under title */
+  display: block;
+  margin-top: 0;
+}
 .note-card .note-footer {
   display:flex; justify-content: space-between; align-items:center; margin-top: 10px;
   font-size: 12px; opacity:.7;
@@ -267,4 +281,130 @@ body {
   .sidebar { width: 200px; }
   .main-content { margin-left: 200px; padding: 12px; }
   .notes-grid { column-width: 220px; column-gap: 10px; }
+}
+
+/* =========================
+   Modern Search Bar Styles
+========================= */
+
+#searchInput {
+    /* --- Centering and Spacing --- */
+    display: block; /* Allows for margin auto to work */
+    width: 60%; /* Adjust width as you like */
+    max-width: 700px; /* Prevents it from getting too wide on large screens */
+    margin: 30px auto 40px; /* Top, Left/Right (auto for center), Bottom */
+
+    /* --- Sizing and Text --- */
+    padding: 16px 25px; /* Vertical and horizontal padding for the "big" feel */
+    font-size: 1.1rem; /* Makes the text inside a bit bigger */
+    color: #333;
+
+    /* --- The "Tube" Shape & Style --- */
+    border: 1px solid #e0e0e0; /* A light, modern border */
+    border-radius: 999px; /* This is the trick for the perfect pill shape */
+    background-color: #ffffff;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); /* A subtle shadow for depth */
+
+    /* --- Making it feel nice to use --- */
+    outline: none; /* Removes the default browser outline on click */
+    transition: all 0.2s ease-in-out; /* Smooth transition for focus effect */
+}
+
+/* Style for when the search bar is clicked/focused */
+#searchInput:focus {
+    border-color: #c0c0c0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* =========================
+   Search Highlight Style
+========================= */
+
+mark.highlight {
+    background-color: #FF6600; /* A deep orange color */
+    color: #ffffff; /* White text for contrast */
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+/* ===== Force note content to sit under title & align left in list ===== */
+
+/* Make the card itself left-aligned */
+.note-card { text-align: left !important; }
+
+/* Force the title to be left, even if editor/classes try to center it */
+.note-card .note-title,
+.note-card .note-title * {
+  text-align: left !important;
+  margin-bottom: 6px;
+}
+
+/* Force the body and anything inside it to be left-aligned */
+.note-card .note-body,
+.note-card .note-body * {
+  text-align: left !important;
+  display: block;
+}
+
+/* Neutralize common editor-generated center alignments */
+.note-card .note-body [style*="text-align:center"],
+.note-card .note-body [align="center"],
+.note-card .note-body .text-center,
+.note-card .note-body .ql-align-center,
+.note-card .note-body center {
+  text-align: left !important;
+}
+
+/* Make sure there isn't an artificial vertical centering via flex */
+.note-card .note-body {
+  justify-content: unset !important;
+  align-items: unset !important;
+  margin-top: 0;
+  white-space: normal; /* keep wrapping normal in the list */
+}
+.notes-grid,
+.note-card { text-align: left !important; }
+
+/* Body itself: never flex/center/indent; full width; normal wrapping */
+.note-card .note-body {
+  display: block !important;
+  text-align: left !important;
+  text-indent: 0 !important;
+  margin: 0 !important;
+  max-width: none !important;
+  width: 100% !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+  justify-content: unset !important;
+  align-items: unset !important;
+}
+
+/* Children of the body: no block centering, no first-line indent, no narrow columns */
+.note-card .note-body > * {
+  display: block !important;
+  text-align: left !important;
+  text-indent: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  max-width: none !important;    /* beats .prose { max-width: 65ch } etc. */
+  width: 100% !important;        /* beats inline/inline-block shrink */
+  float: none !important;
+  align-self: stretch !important; /* beats flex children centering */
+}
+
+/* Nuke common editor/Tailwind center patterns inside body */
+.note-card .note-body [style*="text-align:center"],
+.note-card .note-body [align="center"],
+.note-card .note-body .text-center,
+.note-card .note-body .ql-align-center,
+.note-card .note-body center {
+  text-align: left !important;
+}
+
+/* Belt-and-suspenders: first visible element cannot indent */
+.note-card .note-body > *:first-child {
+  text-indent: 0 !important;
+  margin-top: 0 !important;
 }

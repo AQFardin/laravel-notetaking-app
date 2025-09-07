@@ -34,9 +34,19 @@
                 
 
                 <li><a href="#"><i class="fas fa-users"></i><span>Group</span></a></li>
-                <li><a href="#"><i class="fas fa-flag"></i><span>Events</span></a></li>
-                <li><a href="#"><i class="fas fa-calendar-alt"></i><span>Calendar</span></a></li>
-            </ul>
+                <li>
+                  <a href="{{ route('events.index') }}"
+                     class="{{ request()->routeIs('events.index') ? 'active' : '' }}">
+                   <i class="fas fa-flag"></i><span>Events</span>
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{{ route('events.calendar') }}"
+                     class="{{ request()->routeIs('events.calendar') ? 'active' : '' }}">
+                  <i class="fas fa-calendar-alt"></i><span>Calendar</span>
+                  </a>
+                </li>
 
             <ul class="sidebar-bottom">
                 <li><a href="#"><i class="fas fa-user-circle"></i><span>Profile</span></a></li>
