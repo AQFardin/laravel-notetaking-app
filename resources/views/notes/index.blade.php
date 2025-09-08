@@ -2,6 +2,15 @@
 
 @section('content')
 <style>
+  /* Search highlight */
+mark.hl {
+  background: #fff7ed;        /* light orange */
+  outline: 2px solid #fb923c; /* orange ring */
+  outline-offset: 0;
+  color: #7c2d12;             /* darker orange text */
+  padding: 0 2px;
+}
+
 
   /* Generic brutalist helpers */
   .card { border:3px solid #000; box-shadow:6px 6px 0 #000; border-radius:0; }
@@ -114,9 +123,7 @@
 
 
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:auto;padding-top:8px;">
-          <button class="btn-base btn-outline"
-                  onclick="event.stopPropagation(); alert('Share UI coming soon');">
-            Share…
+          
           </button>
           <form method="POST" action="{{ route('notes.delete',['id'=>$n->id]) }}"
                 onsubmit="event.stopPropagation(); return confirm('Delete this note?')" style="margin:0;">
@@ -344,5 +351,81 @@
   vpClose.addEventListener('click', ()=>hide(vp));
   vp.addEventListener('click', e=>{ if(e.target===vp) hide(vp); });
 })();
+  /* ---------- SEARCH HIGHLIGHT (robust) ---------- */
+  // Safely embed the query (handles quotes, slashes, etc.)
+  const rawSearch = @json(trim($q ?? ''));
+
+  if (rawSearch) {
+    highlightInNotes(rawSearch);
+  }
+
+  function highlightInNotes(query) {
+    // Split on whitespace and filter empties
+    const parts = query.split(/\s+/).filter(Boolean);
+    if (!parts.length) return;
+
+    // Escape regex + build alternation for multi-word highlight
+    const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = parts.map(esc).join('|');
+    const re = new RegExp(pattern, 'gi');
+
+    // For each note card, highlight in title + preview
+    document.querySelectorAll('#notesGrid .note-card').forEach(card => {
+      ['.note-title', '.note-preview'].forEach(sel => {
+        const el = card.querySelector(sel);
+        if (!el) return;
+        unwrapMarks(el);
+        wrapMatches(el, re);
+      });
+    });
+  }
+
+  function unwrapMarks(root) {
+    // Remove any previous <mark class="hl">
+    root.querySelectorAll('mark.hl').forEach(m => {
+      const t = document.createTextNode(m.textContent);
+      m.replaceWith(t);
+    });
+  }
+
+  function wrapMatches(root, regex) {
+    // Walk only text nodes (ignores tags; works with nested HTML in titles)
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        // skip empty and whitespace-only nodes
+        return /\S/.test(node.nodeValue || '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }
+    });
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+
+    nodes.forEach(node => {
+      const text = node.nodeValue;
+      regex.lastIndex = 0; // reset per node
+
+      let last = 0, m;
+      const frag = document.createDocumentFragment();
+      let matchedAny = false;
+
+      while ((m = regex.exec(text)) !== null) {
+        matchedAny = true;
+        const i = m.index;
+        if (i > last) frag.appendChild(document.createTextNode(text.slice(last, i)));
+
+        const mark = document.createElement('mark');
+        mark.className = 'hl';
+        mark.textContent = m[0];
+        frag.appendChild(mark);
+
+        last = i + m[0].length;
+      }
+
+      if (!matchedAny) return;
+
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      node.replaceWith(frag);
+    });
+  }
+
 </script>
 @endsection

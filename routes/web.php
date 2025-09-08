@@ -4,6 +4,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\GroupController;
+use Illuminate\Support\Facades\Hash;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 /* =========================
    AUTH UI (single Blade)
@@ -528,3 +531,123 @@ Route::get('/events/feed', function (Illuminate\Http\Request $r) {
 
     return response()->json($rows);
 })->name('events.feed');
+
+
+
+
+
+/** Helper: require login via session user_id */
+function requireUser(Request $r){
+    $uid = $r->session()->get('user_id');
+    if (!$uid) return [null, redirect()->route('auth')];
+    return [$uid, null];
+}
+
+/** DASHBOARD: latest notes (2–3) + near deadlines */
+Route::get('/dashboard', function(Request $r){
+    // auth helper
+    $uid = $r->session()->get('user_id');
+    if (!$uid) return redirect()->route('auth');
+
+    // latest 3 notes
+    $notes = DB::table('notes')
+        ->where('user_id', $uid)
+        ->orderByDesc(DB::raw('COALESCE(updated_at, created_at)'))
+        ->limit(3)
+        ->get();
+
+    // --- deadlines: detect the correct datetime column(s) that exist ---
+    $candidateCols = [
+        'due_at', 'due_date', 'deadline_at', 'deadline',
+        'start_at', 'start_time', 'start',
+        'event_at', 'event_date', 'date', 'when_at'
+    ];
+
+    $available = [];
+    foreach ($candidateCols as $c) {
+        if (Schema::hasColumn('events', $c)) $available[] = $c;
+    }
+
+    // If nothing suitable, show none to avoid SQL errors
+    if (empty($available)) {
+        $deadlines = collect();
+        return view('dashboard', compact('notes','deadlines'));
+    }
+
+    // Use the first available column for filtering/sorting
+    $primaryCol = $available[0];
+
+    $now  = Carbon::now();
+    $soon = (clone $now)->addDays(14);
+
+    $deadlines = DB::table('events')
+        ->where('user_id', $uid)
+        ->whereBetween($primaryCol, [$now, $soon])
+        ->orderBy($primaryCol)
+        ->limit(5)
+        ->get();
+
+    // pass the chosen column so view knows what to format
+    return view('dashboard', [
+        'notes'        => $notes,
+        'deadlines'    => $deadlines,
+        'deadline_col' => $primaryCol,
+    ]);
+})->name('dashboard');
+
+/** PROFILE: view + update basic info */
+Route::get('/profile', function(Request $r){
+    [$uid, $redir] = requireUser($r); if ($redir) return $redir;
+
+    $user = DB::table('users')->where('id', $uid)->first();
+    abort_if(!$user, 404);
+
+    return view('profile', ['user' => $user]);
+})->name('profile');
+
+/** Save profile (full_name, email). Username is shown but not editable */
+Route::post('/profile', function(Request $r){
+    [$uid, $redir] = requireUser($r); if ($redir) return $redir;
+
+    $full = trim((string)$r->input('full_name', ''));
+    $email = trim((string)$r->input('email', ''));
+
+    if ($full === '' || $email === '') {
+        return back()->with('status', 'Full name and email are required.')->withInput();
+    }
+
+    DB::table('users')->where('id', $uid)->update([
+        'full_name' => $full,
+        'email'     => $email,
+        'updated_at'=> now(),
+    ]);
+
+    return back()->with('status', 'Profile updated.');
+})->name('profile.update');
+
+/** Change password (current -> new) */
+Route::post('/profile/password', function(Request $r){
+    $uid  = $r->session()->get('user_id');
+    if (!$uid) return redirect()->route('auth');
+
+    $curr = (string)$r->input('current_password', '');
+    $pass = (string)$r->input('password', '');
+    $conf = (string)$r->input('password_confirmation', '');
+
+    if ($pass === '' || $pass !== $conf) {
+        return back()->with('status', 'Passwords do not match.')->withInput();
+    }
+
+    // Update only if current password matches exactly (plaintext)
+    // MySQL/MariaDB: NOW();  SQLite: datetime('now');  Postgres: NOW()
+    $affected = DB::update(
+        'UPDATE users SET password = ?, updated_at = NOW() WHERE id = ? AND password = ?',
+        [$pass, $uid, $curr]
+    );
+
+    if ($affected < 1) {
+        return back()->with('status', 'Current password is incorrect.')->withInput();
+    }
+
+    return back()->with('status', 'Password updated.');
+})->name('profile.password');

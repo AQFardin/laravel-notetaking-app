@@ -38,6 +38,10 @@
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const pad = n => String(n).padStart(2,'0');
 
+  // === NEW: compute today's key once ===
+  const now = new Date();
+  const todayKey = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+
   async function load() {
     monthLabel.textContent = `${monthNames[month-1]} ${year}`;
     calGrid.innerHTML = '';
@@ -92,12 +96,22 @@
 
       const key = `${year}-${pad(month)}-${pad(day)}`;
 
+      // === NEW: highlight today's date ===
+      const isToday = (key === todayKey);
+      if (isToday) {
+        cell.style.background = '#fff7ed';                 // light orange
+        cell.style.boxShadow  = 'inset 0 0 0 3px #fb923c'; // orange ring
+      }
+
       const top = document.createElement('div');
       top.style.display='flex';
       top.style.justifyContent='space-between';
       const dnum = document.createElement('div');
       dnum.textContent = day;
       dnum.style.fontWeight='900';
+      if (isToday) {
+        dnum.style.color = '#b45309';  // darker orange number for today
+      }
       top.appendChild(dnum);
       cell.appendChild(top);
 
